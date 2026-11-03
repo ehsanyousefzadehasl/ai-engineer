@@ -199,7 +199,7 @@ The capital of Sweden is Stockholm. (Note: This answer is based on general knowl
 
 > We can replace Ollama with a cloud LLM. The orchestration architecture remains largeley the same. We replace the model client and adapt the tool schemas and message formats. MCP remains independent of the LLM provider.
 
-## Full agent decision loop
+## 11. Full agent decision loop
 
 **An agent loop** is a repeated cycle in which an LLM decides what to do, the application executes the requested actions, and the results are returned to the LLM. The cycle continues until the model produces a final answer or a termination condition is reached.
 
@@ -221,6 +221,50 @@ see the example in session1-05
 > **Why do we need an orchestration loop instead of a single LLM call?**
 > Because complex tasks may require several dependent actions. For example, an agent might first inspect available GPUs, then check their utilization, and finally select a device. Each decision can depend on the result of a previous tool call. The orchestration loop coordinates these interactions while enforcing termination and execution policies.
 
+## 12. Multi-step mcp tool execution
+
+**Parameterized tools** are tools that only accept structured input rather than performing a fixed operation. For example, a GPU suitability checker might accept available memory and required memory. MCP automatically generates their input schemas from Python type annotations.
+
+**Tool chaining**. Using the output of one tool as input to another one. The agent can first retrieve information, then use that information to decide its next action.
+
+**Dynamic planning**. An LLM can choose the next action based on previous observations rather than following a completely predetermined sequence. However, tool chaining alone does not guarantee sophisticated planning.
+
+**Dependency management**. Some tool calls can execute independently, while others must execute sequentially because one needs another's output. This distinction becomes particularly important when we study agent parallelization.
+
+see the following example:
+
+![two tools](assets/session1/img/two_tools.png)
+
+
+check example code in session1/06. then verify with 
+
+```
+python llm_agent.py
+```
+
+if sth like as follows goes on:
+
+```
+$ python llm_agent.py            
+Ask the agent: I want to train a model requiring 24 GB of GPU memory. Check the current GPU and then evaluate whether the model fits.
+
+Agent step 1
+Selected tools: ['gpu_status']
+Tool: gpu_status({})
+
+Agent step 2
+Selected tools: ['estimate_training_fit']
+Tool: estimate_training_fit({'available_memory_gb': 40, 'required_memory_gb': 24})
+
+Agent step 3
+Selected tools: []
+
+Agent: The current GPU is an NVIDIA A100 with **40.0 GB** of available memory. Your model requires **24 GB**, which **fits** in the available memory with **16.0 GB** remaining. ✅
+```
+
+>**What is the difference between sequential and parallel tool execution?**
+>In sequential execution, one tool completes before another executes. This is necessary when the second operation depends on the first operation's result.
+>In parallel execution, independent tool calls can run concurrently, potentially reducing total latency. However, parallel execution requires careful handling of dependencies, failures, and shared resources.
 
 
 
