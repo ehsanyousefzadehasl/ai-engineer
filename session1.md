@@ -8,7 +8,7 @@ Instead of implementing a custom inegration for every tool, applications can use
 
 MCP standardizes communication, but it does not decide which tools an AI agent should execute. This decision belongs to the agent's orchestration logic.
 
-
+![agent->client -> server](assets/session1/img/agent-client-server.png)
 
 ## 2. mcp server
 
@@ -100,6 +100,11 @@ what happens actually is shown below:
 
 **API client** is a python library that communicates with a hosted LLM through an API. For example we can install and use OpenAI SDK,
 
+
+
+
+
+
 ```
 pip install openai
 ```
@@ -119,6 +124,84 @@ An OpenAI API key requires API access and may incur usage charges; a ChatGPT sub
 pay attention that two calls happen in code 03, the following figure shows why:
 
 ![two times llm call](assets/session1/img/two_llm_calls.png)
+
+
+
+
+
+## 10. having local LLM for decision making about which tools should be invoked
+
+**Ollama**: A tool for running and managing language models locally. It exposes an HTTP API, allowing Python applications to interact with models without requiring a paid cloud API.
+
+
+**Local inference**: Executing an AI model on your own computer rather than sending requests to a cloud provider. It offers greater control over data, but performance depends on your available hardware.
+
+
+**Tool-calling model**: An LLM capable of generating structured requests for external tools. The model selects the operation, `while our Python application executes it`.
+
+
+
+Installing Ollama
+```bash
+brew install --cask ollama # Installs the Ollama application and local model server on macOS.
+open -a Ollama # Starts the Ollama application and server.
+pip install -U ollama # Installs the Python client library, allowing Python code to communicate with the Ollama server.
+ollama pull qwen3:4b # Downloads the Qwen3 4B model to your computer.
+```
+
+for verifying the model
+
+```bash
+ollama run qwen3:4b
+```
+
+We can have a chat with the model in terminal. For exiting, give it `\bye`.
+
+then if we execute (session1-04)
+
+```bash
+python llm_agent.py
+```
+
+it will look like as follow:
+
+```bash
+$ python llm_agent.py
+Ask the agent: need to get gpu utilization
+Calling MCP tool: gpu_status({})
+
+Agent: The GPU utilization information is not directly available in the current response. Here's what we do have from the system:
+
+**GPU Status**:
+- **Model**: A100
+- **Memory**: 40 GB
+- **Availability**: Active (available: `true`)
+
+This response indicates the GPU is operational but does not include utilization metrics (e.g., usage percentage, load, etc.). If you need detailed utilization data, you may need to use a different tool or command that specifically tracks GPU usage (e.g., `nvidia-smi` for Linux systems). Let me know if you'd like guidance on that!
+```
+
+So, the process in the example was :
+
+> LLM selects gpu_status → MCP executes → LLM responds
+
+and if we ask sth that the LLM can answer without needing tool:
+
+```bash
+$ python llm_agent.py
+Ask the agent: what is capital of sweden
+
+Agent: The question about the capital of Sweden cannot be answered using the provided tools. The available tool (`gpu_status`) only provides GPU information and isunrelated to geographical data like country capitals. 
+
+<answer>
+The capital of Sweden is Stockholm. (Note: This answer is based on general knowledge, not the provided tools.)
+</answer>
+```
+
+> We can replace Ollama with a cloud LLM. The orchestration architecture remains largeley the same. We replace the model client and adapt the tool schemas and message formats. MCP remains independent of the LLM provider.
+
+## Full agent decision loop
+
+
 
 ## command to execute
 
