@@ -313,8 +313,90 @@ Agent: Your GPU utilization is currently at **75%** and the temperature is **65Â
 
 **tool authorization**: Restricting which operations an agent may execute. An MCP server advertising a tool does not automatically mean the agent should be permitted to use it.
 
-Retry policy: A strategy for repeating an operation after a temporary failure. Retries should be bounded, and generally restricted to safe or idempotent operations, since retrying a state-changing operation could duplicate its effects.
+**Retry policy**: A strategy for repeating an operation after **a temporary failure**. Retries should be bounded, and generally restricted to safe or `idempotent` operations, *since retrying a state-changing operation could duplicate its effects*.
 
+**Least privilege**: Granting an agent only the capabilities necessary for its task. For example, a GPU monitoring agent may need permission to read GPU metrics but not execute shell commands.
+
+see the concepts in the following image
+
+![tool secutiry, validation, retires](assets/session1/img/tool_secutiry_validation_retries.png)
+
+
+**Declarative constraints** describe permitted inputs using schemas instead of relying on manual checks scattered throughout application code. `Pydantic's field` can generate these contraints for mcp tools. 
+
+check code in session1/08 - check and compare old commented and new estimate_training_fit function.
+
+for adding secutiry and retry, we need to install 
+
+```bash
+pip install jsonschema
+```
+
+**Defense in depth**: We validate inputs in our agent before sending them to MCP, even though the high-level MCP server also validates its own tool parameters. Multiple independent validation layers reduce risk.
+
+see the code in session1/08/llm_agent.py
+
+Examples would look like as follows:
+
+```bash
+$ python llm_agent.py
+Ask the agent: Check whether a 24 GB model fits
+
+Agent step 1
+Selected tools: ['gpu_status']
+Tool: gpu_status -> {"meta": null, "content": [{"type": "text", "text": "{\n  \"gpu\": \"NVIDIA A100\",\n  \"available_memory_gb\": 40.0,\n 
+Tool execution time: 0.01s
+
+Agent step 2
+Selected tools: ['estimate_training_fit']
+Tool: estimate_training_fit -> {"meta": null, "content": [{"type": "text", "text": "{\n  \"fits_in_memory\": true,\n  \"remaining_memory_gb\": 16.0\n}"
+Tool execution time: 0.01s
+
+Agent step 3
+Selected tools: []
+
+Agent: The 24 GB model **fits** in the available GPU memory.  
+âœ… **Remaining memory**: 16 GB (after deployment)  
+
+This means your model can run without exceeding the GPU's capacity. Let me know if you need further adjustments!
+```
+
+```bash
+$ python llm_agent.py
+Ask the agent: Check whether a -5 GB model fits
+
+Agent step 1
+Selected tools: ['gpu_status']
+Tool: gpu_status -> {"meta": null, "content": [{"type": "text", "text": "{\n  \"gpu\": \"NVIDIA A100\",\n  \"available_memory_gb\": 40.0,\n 
+Tool execution time: 0.01s
+
+Agent step 2
+Selected tools: ['estimate_training_fit']
+Tool: estimate_training_fit -> Invalid arguments: -5 is less than the minimum of 0
+Tool execution time: 0.00s
+
+Agent step 3
+Selected tools: []
+
+Agent: The required memory value of -5 GB is invalid (memory cannot be negative). This likely indicates a typo in your request. Could you confirm the intended memory size (e.g., "5 GB" instead of "-5 GB")? I'll help check feasibility with the correct value.
+```
+
+```bash
+$ python llm_agent.py
+Ask the agent: decrease GPU working frequency
+
+Agent step 1
+Selected tools: []
+
+Agent: The user requested to "decrease GPU working frequency," but none of the provided tools (`gpu_status`, `estimate_training_fit`, `gpu_utilization`, `gpu_temperature`) are designed to modify GPU settings like working frequency. These tools only provide read-only GPU status information and memory feasibility checks. There is no function available to adjust GPU frequency or configuration parameters. 
+
+<response>
+No tool is available to decrease GPU working frequency. The provided functions only retrieve GPU status and memory information, not configuration settings.
+</response>
+```
+
+>**Q: How do you secure an LLM agent that executes external tools?**
+>I would implement security in the orchestration layer rather than relying only on prompts. This includes an explicit tool allowlist, schema-based argument validation, least-privilege permissions, timeouts, bounded retries, and audit logging. Sensitive operations should also require authorization or human approval.
 ## command to execute
 
 ```
