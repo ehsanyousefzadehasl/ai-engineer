@@ -201,6 +201,27 @@ The capital of Sweden is Stockholm. (Note: This answer is based on general knowl
 
 ## Full agent decision loop
 
+**An agent loop** is a repeated cycle in which an LLM decides what to do, the application executes the requested actions, and the results are returned to the LLM. The cycle continues until the model produces a final answer or a termination condition is reached.
+
+**Termination condition** is a rule determining when an agent should stop. Common conditions include receiving a final response, reaching a maximum number of iterations, exceeding a time budget, or encountering an unrecoverable error.
+
+**Guardrails** are controls enforced by the application to limit what an agent can do. Examples include tool allowlists, argument validation, execution limits, and approval requirements for sensitive operations. Prompt instructions alone are not sufficient security controls.
+
+**Conversation history** is the sequence of user, assistant, and tool messages supplied to the LLM. It lets the model understand previous actions and their results.
+
+![full agent decision loop](assets/session1/img/full_agent_decision_loop.png)
+
+
+see the example in session1-05
+
+> The allowlist prevents calls to undiscovered tools. For a production system, we'd also enforce argument schemas, permissions, and resource limits.
+
+
+`Interview question`
+> **Why do we need an orchestration loop instead of a single LLM call?**
+> Because complex tasks may require several dependent actions. For example, an agent might first inspect available GPUs, then check their utilization, and finally select a device. Each decision can depend on the result of a previous tool call. The orchestration loop coordinates these interactions while enforcing termination and execution policies.
+
+
 
 
 ## command to execute
