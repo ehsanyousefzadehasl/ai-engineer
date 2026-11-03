@@ -397,6 +397,93 @@ No tool is available to decrease GPU working frequency. The provided functions o
 
 >**Q: How do you secure an LLM agent that executes external tools?**
 >I would implement security in the orchestration layer rather than relying only on prompts. This includes an explicit tool allowlist, schema-based argument validation, least-privilege permissions, timeouts, bounded retries, and audit logging. Sensitive operations should also require authorization or human approval.
+
+## 15. refactoring the code we practiced till here ...
+
+**Separation of concerns**: A software design principle where each component has a clearly defined responsibility. This makes applications easier to test, maintain, debug, and extend.
+
+**Modularity**: Organizing software into independent components with well-defined interfaces. For example, we should be able to replace Ollama with another LLM provider without rewriting our MCP execution logic.
+
+**Dependency injection**: Providing a component with the dependencies it needs instead of creating them internally. This makes it easier to substitute mock dependencies during testing.
+
+**Orchestrator**: The component responsible for coordinating the overall agent workflow: sending requests to the LLM, executing selected tools, collecting observations, and determining when to terminate.
+
+![agent architecture](assets/session1/img/agent_architecture.png)
+
+
+We'll preserve all the capabilities we've implemented: dynamic tool discovery, LLM decisions, concurrent execution, input validation, authorization, retries, and bounded iterations.
+
+We'll also use the current MCP Python SDK v2 Client interface instead of the older ClientSession boilerplate. The official SDK recommends this higher-level client.
+
+we keep the mcp_server.py as it was and we organize the rest as follows inside session1/09. 
+
+```
+ai-agent
+├── main.py
+├── agent.py
+├── llm.py
+├── tool_executor.py
+├── mcp_server.py
+└── requirements.txt
+```
+### LLM component - `llm.py`
+**Responsibility**: Communicate with the language model. Other components don't need to know which LLM provider is being used. See `llm.py` in session1/09
+
+If we later switch providers, this is the main integration point to change.
+
+
+### tool executor - `tool_executor.py`
+
+**Responsibility**: Enforce permissions, validate arguments, execute MCP tools, and handle failures.
+
+**Fail-closed security**: If a tool is unknown or validation fails, execution is denied by default. *The application should not assume that an LLM-generated request is safe.*
+
+see tool_executor in 09.
+
+This retains bounded retries for our four mock, read-only tools. In production, retry policy should be configured per tool and distinguish transient failures from permanent errors.
+
+
+### agent orchestrator - `agent.py`
+
+**Responsibility**: Manage the conversation, request LLM decisions, dispatch tools, and enforce termination.
+
+**Dependency injection**: Instead of directly creating Ollama and MCP clients, the agent receives the LLM and tool executor as constructor arguments.
+
+see `agent.py` 
+
+Notice how small our orchestrator has become. It doesn't need to understand the MCP transport, Ollama HTTP API, or JSON Schema validation.
+
+### Application entry point — `main.py`
+
+**Responsibility**: Initialize dependencies and connect components. This is sometimes called the composition root.
+
+Dependencies also go into requirements.txt
+
+```bash
+pip install -r requirements.txt
+python main.py
+```
+
+>Q: Why separate the agent, LLM, and tool executor?
+>Each component has one responsibility. The agent manages workflow, the LLM provides decisions, and the executor handles secure tool execution. This improves maintainability, testability, and extensibility.
+
+>Q: How would you replace Ollama with Azure OpenAI?
+>I would implement a new LLM adapter exposing the same chat() interface. The orchestration and MCP components could remain largely unchanged, while the adapter handles provider-specific request and response formats.
+
+>Q: How would you unit-test this architecture?
+>I would inject a fake LLM that returns predefined tool decisions and a fake MCP client that returns controlled tool results. This allows testing orchestration, authorization, retry limits, and termination without running a real model.
+
+>Q: Is this production-ready?
+>Not yet. It has the core building blocks, but still needs structured logging, configuration management, stronger error classification, controlled dependency scheduling, proper tests, and authentication for remote MCP servers.
+
+
+
+## 16. Automated tests and observability
+
+
+
+
+
 ## command to execute
 
 ```
