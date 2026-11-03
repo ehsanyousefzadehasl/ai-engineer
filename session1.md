@@ -266,7 +266,54 @@ Agent: The current GPU is an NVIDIA A100 with **40.0 GB** of available memory. Y
 >In sequential execution, one tool completes before another executes. This is necessary when the second operation depends on the first operation's result.
 >In parallel execution, independent tool calls can run concurrently, potentially reducing total latency. However, parallel execution requires careful handling of dependencies, failures, and shared resources.
 
+## 13. Parallel mcp tool execution
 
+**Concurrency**. Multiple operations make progress during overlapping periods. In Python, `asyncio` supports concurrency for I/O-bound tasks without requiring multiple threads.
+
+**Parallel tool calling**. An LLM can request multiple tool executions in one response. The orchesterator can then dispatch independent requests concurrently and collect their results.
+
+
+`asyncio.gather()` is an asynchronous python function that runs multiple awaitable operations concurrently and returns their results in the same order as the inputs.
+
+**Concurrency vs. parallelism**. Concurrency means operations overlap in time; parallelism means work executes simultaneously. asyncio primarily provides concurrency, which is particularly useful for network requests, API calls, and MCP communication.
+
+see the following example
+![parallel mcp tool](assets/session1/img/parallel_mcp_tool.png)
+
+
+check code in session1/07
+
+>**Fan-out/fan-in**: Fan-out dispatches independent operations concurrently. Fan-in collects their results before the next processing step.
+
+Then the example when executing will be sth like:
+
+```bash
+$ python llm_agent.py 
+Ask the agent: Check both my GPU utilization and temperature using their respective tools, and summarize the results.
+
+Agent step 1
+Selected tools: ['gpu_utilization', 'gpu_temperature']
+Executed: gpu_utilization
+Executed: gpu_temperature
+Tool execution time: 2.02s
+
+Agent step 2
+Selected tools: []
+
+Agent: Your GPU utilization is currently at **75%** and the temperature is **65°C**. Both metrics indicate healthy operation within normal ranges.
+```
+
+
+> Should all agent tool calls execute concurrently?
+> No. Only independent operations should be executed concurrently. If one tool requires another tool's output, the orchestrator must preserve their dependency order. Parallel execution also requires handling timeouts, errors, rate limits, and shared resources.
+
+## 14. Tool secutiry, validation, and retires
+
+**input valication**. Checking tool arguments against expected types, formats, and contraints before execution. This prevents malformed requests from reaching a tool. We can validate arguments against the **JSON Schema** advertised by `MCP`.
+
+**tool authorization**: Restricting which operations an agent may execute. An MCP server advertising a tool does not automatically mean the agent should be permitted to use it.
+
+Retry policy: A strategy for repeating an operation after a temporary failure. Retries should be bounded, and generally restricted to safe or idempotent operations, since retrying a state-changing operation could duplicate its effects.
 
 ## command to execute
 
