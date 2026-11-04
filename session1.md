@@ -478,11 +478,123 @@ python main.py
 
 
 
-## 16. Automated tests and observability
+## 16. Automated tests
+
+**Unit testing**: Testing individual components in isolation to verify their behavior without relying on external services.
 
 
+**Mocking**: Replacing a real dependency with a controlled substitute. For example, we can simulate LLM responses without loading Qwen or running Ollama.
+
+**Deterministic testing**: Making tests predictable and repeatable. Instead of relying on an LLM to select the expected tool, we explicitly specify what it should return.
 
 
+**Concurrency testing**: Checking that independent tasks actually overlap rather than accidentally executing sequentially.
+
+
+**Test isolation**: Each test creates its own dependencies and state, preventing one test from affecting another.
+
+So, what we want to test:
+
+|test|expected behavior|
+|---|---|
+|Agent decision loop|Executes a tool, then returns a final response|
+|Concurrent execution|Two independent tools overlap|
+|Unauthorized tool|Tool execution is rejected|
+|Invalid arguments|Schema validation prevents execution|
+|Maximum steps|Agent terminates after its configured limit|
+
+The first step is installing `pytest`,
+
+```bash
+pip install pytest
+```
+
+A good practice: Add pytest to your development dependencies.
+
+
+### `tests/test_agent.py`
+Concept — **Fake dependencies**: Instead of invoking a real LLM, we'll inject an object that produces predetermined responses. This allows us to test orchestration `independently from model quality`.
+
+
+### `tests/test_tool_executor.py`
+Concept — **Security testing**: We deliberately submit forbidden tool names and invalid arguments to verify that the executor rejects them before invoking the MCP server.
+
+
+then run the tests with 
+
+```bash
+python -m pytest tests/ -v
+```
+
+## Production Engineering
+
+### step1: configuration + structured logging
+
+**concepts**:
+
+**configuration management**: Separates operational settings from source code. The same application can run with `different models`, `timeouts`, and `logging levels` without changing its implementation. In production, settings are commonly supplied through `environment variables` or `a secret manager`.
+
+**Pydantic Settings**: A Python library that loads configuration from `environment variables` and validates it using Python types and constraints. Invalid configuration can be detected when the application **starts**.
+
+
+**Structured logging**: Records events as **machine-readable data**, typically JSON, rather than unstructured text. It makes logs easier to search, aggregate, and analyze using systems such as **Azure Monitor**, **Datadog**, or **Grafana Loki**.
+
+**Correlation ID**: A unique identifier attached to events belonging to the same request. It helps trace a request across the agent, tool executor, and external services.
+
+install dependencies
+
+```bash
+pip install pydantic-settings
+```
+
+Create `config.py`, which its purpose is to keep all runtime configuration in one validated place.
+
+
+Create `.env` in your project directory:
+
+
+Add `.env` to `.gitignore` to avoid accidentally committing future secrets. You can commit an .env.example containing non-sensitive defaults.
+
+Create `logging_config.py`, which its purpose is to produce consistent JSON log events with timestamps, severity, and optional structured fields.
+
+
+>Notice that logs go to stderr. This is important for stdio-based MCP servers, because stdout is reserved for protocol messages.
+
+
+Integrate the added codes with main.py
+
+Concept — **Application bootstrap**: The startup phase where configuration, logging, dependencies, and application services are initialized.
+
+We'll connect settings.tool_timeout to the executor during our retry-policy refactor.
+
+
+Add a request ID and execution timing
+Concept — **Request tracing**: Tracking an operation from its start to completion using a shared identifier and timing measurements.
+
+
+see the following beautiful output of running `python main.py`
+
+```
+{"timestamp": "2026-11-04T12:57:56.043123+00:00", "level": "INFO", "logger": "agent", "message": "Starting agent"}
+Ask the agent: hey can you find my gpu temperature?
+{"timestamp": "2026-11-04T12:58:42.986699+00:00", "level": "INFO", "logger": "agent", "message": "Agent request started", "request_id": "605d2a213d4440b5b405238c1f6f26d8"}
+
+Agent step 1
+{"timestamp": "2026-11-04T12:58:48.727066+00:00", "level": "INFO", "logger": "httpx", "message": "HTTP Request: POST http://127.0.0.1:11434/api/chat \"HTTP/1.1 200 OK\""}
+Tool executed: gpu_temperature
+
+Agent step 2
+{"timestamp": "2026-11-04T12:58:56.619738+00:00", "level": "INFO", "logger": "httpx", "message": "HTTP Request: POST http://127.0.0.1:11434/api/chat \"HTTP/1.1 200 OK\""}
+
+Agent: Your GPU temperature is **65°C**.
+{"timestamp": "2026-11-04T12:58:56.621934+00:00", "level": "INFO", "logger": "agent", "message": "Agent request finished", "request_id": "605d2a213d4440b5b405238c1f6f26d8", "duration_ms": 13635.37}
+
+Agent: Your GPU temperature is **65°C**.
+```
+
+>Q: Why use structured logging instead of print()?
+>Structured logs provide consistent, searchable fields such as timestamps, severity, request IDs, and execution duration. Unlike arbitrary print statements, they integrate with centralized observability systems and support filtering, alerting, and debugging across distributed components.
+>One important production rule: never log API keys, access tokens, or sensitive user content unnecessarily.
 
 ## command to execute
 
