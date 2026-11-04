@@ -1,6 +1,7 @@
 
 import asyncio
 from types import SimpleNamespace as NS
+from xmlrpc import client
 
 from tool_executor import ToolExecutor
 
@@ -76,7 +77,9 @@ def test_invalid_arguments():
             })
         )
 
-        assert "failed" in result["content"].lower()
+        # assert "failed" in result["content"].lower()
+        assert "ToolValidationError" in result["content"]
+
         assert client.calls == []
 
     asyncio.run(scenario())
